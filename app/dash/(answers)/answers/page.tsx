@@ -1,10 +1,12 @@
 'use client'
 
-import { 
-  useState, 
+import {
+  useState,
   FormEvent,
   KeyboardEvent
 } from 'react'
+
+import Image from 'next/image'
 
 import { toast } from 'sonner'
 import { motion } from 'framer-motion'
@@ -17,7 +19,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 
-import { 
+import {
   Loader2,
   MessageCircleQuestion,
   ExternalLink,
@@ -48,14 +50,14 @@ export default function AnswersPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     if (!query.trim()) return
-    
+
     // Save the current query as the searched query
     setSearchedQuery(query.trim())
-    
+
     setIsLoading(true)
     setResult(null)
     setError(null)
-    
+
     try {
       const response = await fetch('/dash/api/answers', {
         method: 'POST',
@@ -66,11 +68,11 @@ export default function AnswersPage() {
       })
 
       const data = await response.json()
-      
+
       if (!response.ok) {
         throw new Error(data.error || 'Failed to get answer')
       }
-      
+
       setResult(data)
     } catch (err) {
       console.error('Error fetching answer:', err)
@@ -107,7 +109,7 @@ export default function AnswersPage() {
       <div className="w-full max-w-2xl flex flex-col gap-4">
         <form onSubmit={handleSubmit} className="relative">
           <Textarea
-            maxLength={300}
+            maxLength={200}
             withCounter
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -120,39 +122,36 @@ export default function AnswersPage() {
               <Button
                 type="button"
                 variant="outline"
-                size="sm"
+                size="icon"
                 onClick={handleReset}
                 className="gap-1"
               >
                 <RotateCcw className="size-3.5" />
-                Reset
               </Button>
               <Button
                 type="submit"
-                size="sm"
+                size="icon"
                 disabled={isLoading || !query.trim()}
               >
                 {isLoading ? (
-                  <Loader2 className="size-4 mr-2 animate-spin" />
+                  <Loader2 className="size-4 animate-spin" />
                 ) : (
-                  <MessageCircleQuestion className="size-4 mr-2" />
+                  <MessageCircleQuestion className="size-4" />
                 )}
-                {isLoading ? 'Searching...' : 'Ask'}
               </Button>
             </div>
           ) : (
             <Button
               type="submit"
               className="absolute right-3 top-3"
-              size="sm"
+              size="icon"
               disabled={isLoading || !query.trim()}
             >
               {isLoading ? (
-                <Loader2 className="size-4 mr-2 animate-spin" />
+                <Loader2 className="size-4 animate-spin" />
               ) : (
-                <MessageCircleQuestion className="size-4 mr-2" />
+                <MessageCircleQuestion className="size-4" />
               )}
-              {isLoading ? 'Searching...' : 'Ask'}
             </Button>
           )}
         </form>
@@ -215,19 +214,19 @@ export default function AnswersPage() {
                 <h3 className="text-sm font-medium text-muted-foreground">Sources</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {result.citations.map((citation, index) => (
-                    <a 
-                      key={index} 
-                      href={citation.url} 
-                      target="_blank" 
+                    <a
+                      key={index}
+                      href={citation.url}
+                      target="_blank"
                       rel="noopener noreferrer"
                       className="no-underline"
                     >
                       <Card className="p-3 hover:bg-muted/50 transition-colors">
                         <div className="flex items-start gap-3">
                           {citation.favicon && (
-                            <img 
-                              src={citation.favicon} 
-                              alt="" 
+                            <Image
+                              src={citation.favicon}
+                              alt=""
                               className="size-5 rounded-sm mt-0.5"
                               onError={(e) => {
                                 (e.target as HTMLImageElement).style.display = 'none'

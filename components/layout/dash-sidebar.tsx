@@ -9,6 +9,8 @@ import { OrganizationSwitcher } from '@/components/layout/organization-switcher'
 import { ChatSidebar } from '@/components/chat/sidebar'
 import { ChatMain } from '@/components/chat/main'
 
+import { AnswersSidebar } from '@/app/dash/(answers)/components/sidebar'
+
 import {
   Sidebar,
   SidebarContent,
@@ -45,7 +47,7 @@ const data = {
           <MessageCircleQuestion className="w-4 h-4 inline-block" /> Answers
         </div>
       ),
-      sidebarContent: <div>Answers</div>,
+      sidebarContent: <AnswersSidebar />,
     },
     {
       title: 'Chat',
