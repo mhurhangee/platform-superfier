@@ -17,3 +17,14 @@ model Chat {
   settings Json? // Settings for the chat
   contextTokens Int? // Number of tokens used for context
 }
+
+model SavedAnswer {
+  id        String   @id @default(cuid())
+  query     String   // The original question
+  answer    String   // The answer content
+  citations Json?    // Citations stored as JSON
+  shared    Boolean  @default(false) // Whether the answer is shared publicly
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  userId    String   // from clerk
+}

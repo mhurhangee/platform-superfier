@@ -1,12 +1,6 @@
 'use client'
 
-import {
-  useState,
-  FormEvent,
-  KeyboardEvent
-} from 'react'
-
-import Image from 'next/image'
+import { useState, FormEvent, KeyboardEvent } from 'react'
 
 import { toast } from 'sonner'
 import { motion } from 'framer-motion'
@@ -24,28 +18,35 @@ import {
   MessageCircleQuestion,
   ExternalLink,
   AlertCircle,
-  RotateCcw
+  RotateCcw,
+  Bookmark,
+  BookmarkCheck,
 } from 'lucide-react'
+
+import { useSavedAnswers } from '../../../../components/contexts/saved-answers-context'
 
 // Define the types for our API response
 interface Citation {
-  title: string;
-  url: string;
-  favicon: string;
+  title: string
+  url: string
+  favicon: string
 }
 
 interface AnswerResponse {
-  answer: string;
-  citations?: Citation[];
-  error?: string;
+  answer: string
+  citations?: Citation[]
+  error?: string
 }
 
 export default function AnswersPage() {
+  const { saveAnswer } = useSavedAnswers()
   const [query, setQuery] = useState('')
   const [searchedQuery, setSearchedQuery] = useState('') // Store the query that was actually searched
   const [isLoading, setIsLoading] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   const [result, setResult] = useState<AnswerResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [isSaved, setIsSaved] = useState(false)
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -57,6 +58,7 @@ export default function AnswersPage() {
     setIsLoading(true)
     setResult(null)
     setError(null)
+    setIsSaved(false)
 
     try {
       const response = await fetch('/dash/api/answers', {
@@ -97,7 +99,30 @@ export default function AnswersPage() {
     setError(null)
     setQuery('')
     setSearchedQuery('') // Also reset the searched query
+    setIsSaved(false)
     toast.info('Search reset')
+  }
+
+  const handleSaveAnswer = async () => {
+    if (!result || !searchedQuery) return
+
+    setIsSaving(true)
+    try {
+      const success = await saveAnswer({
+        query: searchedQuery,
+        answer: result.answer,
+        citations: result.citations,
+      })
+
+      if (success) {
+        setIsSaved(true)
+      }
+    } catch (err) {
+      console.error('Error saving answer:', err)
+      toast.error('Failed to save answer')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   return (
@@ -128,11 +153,7 @@ export default function AnswersPage() {
               >
                 <RotateCcw className="size-3.5" />
               </Button>
-              <Button
-                type="submit"
-                size="icon"
-                disabled={isLoading || !query.trim()}
-              >
+              <Button type="submit" size="icon" disabled={isLoading || !query.trim()}>
                 {isLoading ? (
                   <Loader2 className="size-4 animate-spin" />
                 ) : (
@@ -201,10 +222,35 @@ export default function AnswersPage() {
             className="w-full space-y-4"
           >
             <Card className="p-6 w-full">
-              <CardContent>
+              <CardContent className="p-0">
                 <div className="prose dark:prose-invert max-w-none">
-                  <h3 className="text-lg font-medium text-muted-foreground uppercase">{searchedQuery}</h3>
-                  <div className="text-left text-sm whitespace-pre-wrap"><ReactMarkdown>{result.answer}</ReactMarkdown></div>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-medium text-muted-foreground uppercase m-0">
+                      {searchedQuery}
+                    </h3>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleSaveAnswer}
+                      disabled={isSaving || isSaved}
+                      className="gap-1.5 ml-2 flex-shrink-0"
+                    >
+                      {isSaved ? (
+                        <>
+                          <BookmarkCheck className="size-4 text-green-500" />
+                          <span className="text-sm">Saved</span>
+                        </>
+                      ) : (
+                        <>
+                          <Bookmark className="size-4" />
+                          <span className="text-sm">{isSaving ? 'Saving...' : 'Save'}</span>
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  <div className="text-left text-sm whitespace-pre-wrap">
+                    <ReactMarkdown>{result.answer}</ReactMarkdown>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -224,12 +270,14 @@ export default function AnswersPage() {
                       <Card className="p-3 hover:bg-muted/50 transition-colors">
                         <div className="flex items-start gap-3">
                           {citation.favicon && (
-                            <Image
+                            <img
                               src={citation.favicon}
                               alt=""
+                              width={20}
+                              height={20}
                               className="size-5 rounded-sm mt-0.5"
                               onError={(e) => {
-                                (e.target as HTMLImageElement).style.display = 'none'
+                                ;(e.target as HTMLImageElement).style.display = 'none'
                               }}
                             />
                           )}
