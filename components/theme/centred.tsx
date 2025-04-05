@@ -1,6 +1,6 @@
 import { ReactNode } from 'react'
 
-export async function Centred({
+export function Centred({
   icon,
   children,
   title,
@@ -12,7 +12,7 @@ export async function Centred({
   subtitle?: string
 }) {
   return (
-    <main className="container flex h-full flex-col items-center mx-auto justify-center max-w-3xl text-center gap-6">
+    <main className="container flex h-full flex-col items-center mx-auto justify-center max-w-3xl text-center gap-4">
       <h1 className="text-5xl font-bold tracking-tighter">
         {icon}
         {title}
@@ -20,7 +20,7 @@ export async function Centred({
 
       {subtitle && <p className="text-lg text-muted-foreground">{subtitle}</p>}
 
-      <div className="w-full max-w-3xl p-4 flex justify-center">{children}</div>
+      <div className="w-full max-w-3xl flex justify-center">{children}</div>
     </main>
   )
 }
