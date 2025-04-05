@@ -1,11 +1,20 @@
 'use client'
 
-import { useState, FormEvent } from 'react'
+import { 
+  useState, 
+  FormEvent 
+} from 'react'
+
 import { Centred } from '@/components/theme/centred'
-import { MessageCircleQuestion } from 'lucide-react'
+
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Search } from 'lucide-react'
+
+import { 
+  Search, 
+  Loader2,
+  MessageCircleQuestion
+} from 'lucide-react'
 
 export default function AnswersPage() {
   const [query, setQuery] = useState('')
@@ -37,7 +46,9 @@ export default function AnswersPage() {
           disabled={isLoading || !query.trim()}
         >
           {isLoading ? (
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600"></div>
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600">
+              <Loader2 className="size-4" />
+            </div>
           ) : (
             <>
               <Search className="mr-2 h-4 w-4" />
