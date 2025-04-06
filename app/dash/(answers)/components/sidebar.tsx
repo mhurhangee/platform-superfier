@@ -12,6 +12,8 @@ import {
   AlertCircle,
   BookmarkCheck,
   Info,
+  RefreshCw,
+  Lightbulb
 } from 'lucide-react'
 import { SavedAnswerModal } from './answer-modal'
 import { Button } from '@/components/ui/button'
@@ -22,12 +24,14 @@ import { LoadingPlaceholder } from '@/components/ui/loading-placeholder'
 import { useSavedAnswers } from '@/components/contexts/saved-answers-context'
 import { SavedAnswer } from '@/types/answers'
 import { useSearch } from '@/hooks/useSearch'
-import { useAsync } from '@/hooks/useAsync'
+import { toast } from 'sonner'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 export function AnswersSidebar() {
-  const { savedAnswers, isLoading, isDeleting, deleteAnswer } = useSavedAnswers()
+  const { savedAnswers, isLoading, isDeleting, deleteAnswer, refreshAnswers } = useSavedAnswers()
   const [selectedAnswer, setSelectedAnswer] = useState<SavedAnswer | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Use the custom search hook
   const { searchQuery, setSearchQuery, filteredItems, paginateResults } = useSearch(
@@ -39,19 +43,6 @@ export function AnswersSidebar() {
   // Paginate the filtered answers
   const { paginatedItems, hasMore, loadMore } = paginateResults(10)
 
-  // Use the async hook for deleting answers
-  const { execute: executeDelete } = useAsync(
-    async (id: string) => {
-      return await deleteAnswer(id)
-    },
-    {
-      showSuccessToast: true,
-      showErrorToast: true,
-      successMessage: 'Answer deleted successfully',
-      errorMessage: 'Failed to delete answer'
-    }
-  )
-
   // Handle opening the modal with a selected answer
   const handleOpenAnswer = useCallback((answer: SavedAnswer) => {
     setSelectedAnswer(answer)
@@ -61,8 +52,31 @@ export function AnswersSidebar() {
   // Handle deleting a saved answer
   const handleDeleteAnswer = useCallback(async (id: string, e: React.MouseEvent) => {
     e.stopPropagation() // Prevent opening the modal
-    await executeDelete(id)
-  }, [executeDelete])
+    const success = await deleteAnswer(id)
+    if (success) {
+      // If the deleted answer is currently selected, close the modal
+      if (selectedAnswer && selectedAnswer.id === id) {
+        setIsModalOpen(false)
+        setSelectedAnswer(null)
+      }
+    }
+  }, [deleteAnswer, selectedAnswer])
+
+  // Handle refreshing saved answers
+  const handleRefresh = useCallback(async () => {
+    if (isRefreshing) return
+
+    setIsRefreshing(true)
+    try {
+      await refreshAnswers()
+      toast.success('Saved answers refreshed')
+    } catch (error) {
+      console.error('Error refreshing answers:', error)
+      toast.error('Failed to refresh saved answers')
+    } finally {
+      setIsRefreshing(false)
+    }
+  }, [refreshAnswers, isRefreshing])
 
   return (
     <div className="flex flex-col">
@@ -105,18 +119,37 @@ export function AnswersSidebar() {
           variant="ghost"
           defaultOpen={true}
         >
-          {/* Search input */}
-          <div className="relative mb-3">
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search saved answers..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-8"
-            />
+          <div className="flex items-center justify-between mb-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search saved answers..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-8"
+              />
+            </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 ml-2 flex-shrink-0"
+                  onClick={handleRefresh}
+              disabled={isRefreshing || isLoading}
+              title="Refresh saved answers"
+            >
+              <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span className="sr-only">Refresh</span>
+            </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Refresh saved answers</p>
+            </TooltipContent>
+          </Tooltip>
           </div>
 
-          {isLoading ? (
+          {isLoading || isRefreshing ? (
             <LoadingPlaceholder variant="inline" lines={3} />
           ) : filteredItems.length > 0 ? (
             <div className="space-y-3">
@@ -172,7 +205,7 @@ export function AnswersSidebar() {
         {/* Tips and tricks */}
         <CollapsibleSection
           title="Tips and Tricks"
-          icon={<Info className="size-4 mt-0.5 flex-shrink-0" />}
+          icon={<Lightbulb className="size-4 mt-0.5 flex-shrink-0" />}
           variant="ghost"
           defaultOpen={false}
         >

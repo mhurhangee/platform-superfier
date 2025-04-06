@@ -1,6 +1,7 @@
 'use client'
+import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
-import { X, Trash2 } from 'lucide-react'
+import { X, Trash2, Loader2 } from 'lucide-react'
 
 import {
   Dialog,
@@ -18,11 +19,27 @@ interface SavedAnswerModalProps {
   isOpen: boolean
   onClose: () => void
   answer: SavedAnswer | null
-  onDelete?: (id: string) => void
+  onDelete?: (id: string) => Promise<boolean>
 }
 
 export function SavedAnswerModal({ isOpen, onClose, answer, onDelete }: SavedAnswerModalProps) {
+  const [isDeleting, setIsDeleting] = useState(false)
+  
   if (!answer) return null
+  
+  const handleDelete = async () => {
+    if (!onDelete || isDeleting) return
+    
+    setIsDeleting(true)
+    try {
+      await onDelete(answer.id)
+      onClose() // Close the modal after successful deletion
+    } catch (error) {
+      console.error('Error deleting answer:', error)
+    } finally {
+      setIsDeleting(false)
+    }
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -41,7 +58,7 @@ export function SavedAnswerModal({ isOpen, onClose, answer, onDelete }: SavedAns
           </div>
         </div>
 
-        {/* Use the new CitationList component */}
+        {/* Use the CitationList component */}
         <CitationList citations={answer.citations} className="mt-6" />
 
         {onDelete && (
@@ -50,10 +67,20 @@ export function SavedAnswerModal({ isOpen, onClose, answer, onDelete }: SavedAns
               variant="outline"
               size="sm"
               className="text-destructive hover:bg-destructive/10 border-destructive/20"
-              onClick={() => onDelete(answer.id)}
+              onClick={handleDelete}
+              disabled={isDeleting}
             >
-              <Trash2 className="mr-2 h-4 w-4" />
-              Delete Answer
+              {isDeleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete Answer
+                </>
+              )}
             </Button>
           </DialogFooter>
         )}

@@ -18,8 +18,13 @@ export function LoadingPlaceholder({
   variant = 'card',
 }: LoadingPlaceholderProps) {
   const skeletons = Array.from({ length: lines }, (_, i) => {
-    const width = i === 0 ? '3/4' : i === lines - 1 ? '2/3' : i % 2 === 0 ? 'full' : '5/6'
-    return <Skeleton key={i} className={`h-4 w-${width}`} />
+    // Use template literals for width classes
+    let width: string;
+    if (i === 0) width = 'w-3/4';
+    else if (i === lines - 1) width = 'w-2/3';
+    else width = i % 2 === 0 ? 'w-full' : 'w-5/6';
+    
+    return <Skeleton key={i} className={`h-4 ${width}`} />
   })
 
   if (variant === 'inline') {

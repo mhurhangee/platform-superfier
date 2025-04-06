@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { toast } from 'sonner'
 
 interface AsyncState<T> {
@@ -29,14 +29,13 @@ export function useAsync<T = any>(
     error: null,
   })
 
-  const {
-    onSuccess,
-    onError,
-    showSuccessToast = false,
-    showErrorToast = true,
-    successMessage = 'Operation completed successfully',
-    errorMessage = 'Operation failed',
-  } = options
+  // Use a ref for options to prevent unnecessary recreation of the execute function
+  const optionsRef = useRef(options)
+  
+  // Update the ref when options change
+  useEffect(() => {
+    optionsRef.current = options
+  }, [options])
 
   const execute = useCallback(
     async (...args: any[]) => {
@@ -44,6 +43,12 @@ export function useAsync<T = any>(
       try {
         const result = await asyncFunction(...args)
         setState({ data: result, isLoading: false, error: null })
+        
+        const { 
+          onSuccess, 
+          showSuccessToast, 
+          successMessage = 'Operation completed successfully' 
+        } = optionsRef.current
         
         if (showSuccessToast) {
           toast.success(successMessage)
@@ -58,6 +63,12 @@ export function useAsync<T = any>(
         const error = e instanceof Error ? e : new Error(String(e))
         setState({ data: null, isLoading: false, error })
         
+        const { 
+          onError, 
+          showErrorToast = true, 
+          errorMessage = 'Operation failed' 
+        } = optionsRef.current
+        
         if (showErrorToast) {
           toast.error(`${errorMessage}: ${error.message}`)
         }
@@ -69,7 +80,7 @@ export function useAsync<T = any>(
         throw error
       }
     },
-    [asyncFunction, onSuccess, onError, showSuccessToast, showErrorToast, successMessage, errorMessage]
+    [asyncFunction] // Only depend on the asyncFunction
   )
 
   return {

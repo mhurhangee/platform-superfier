@@ -23,11 +23,21 @@ export function SavedAnswersProvider({ children }: { children: ReactNode }) {
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState<Record<string, boolean>>({})
 
-  // Function to fetch saved answers
+  // Function to fetch saved answers with cache busting
   const fetchSavedAnswers = useCallback(async () => {
     try {
       setIsLoading(true)
-      const response = await fetch('/dash/api/saved-answers')
+      // Add a cache-busting timestamp to prevent browser caching
+      const timestamp = new Date().getTime()
+      const response = await fetch(`/dash/api/saved-answers?t=${timestamp}`, {
+        // Add cache control headers
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      })
+      
       if (!response.ok) {
         throw new Error('Failed to fetch saved answers')
       }
@@ -55,6 +65,9 @@ export function SavedAnswersProvider({ children }: { children: ReactNode }) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
         },
         body: JSON.stringify(data),
       })
@@ -90,11 +103,16 @@ export function SavedAnswersProvider({ children }: { children: ReactNode }) {
     setIsDeleting((prev) => ({ ...prev, [id]: true }))
 
     // Optimistically update UI
-    setSavedAnswers(savedAnswers.filter((answer) => answer.id !== id))
+    setSavedAnswers((prev) => prev.filter((answer) => answer.id !== id))
 
     try {
       const response = await fetch(`/dash/api/saved-answers?id=${id}`, {
         method: 'DELETE',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
       })
 
       if (!response.ok) {
@@ -118,6 +136,13 @@ export function SavedAnswersProvider({ children }: { children: ReactNode }) {
   // Load saved answers on component mount
   useEffect(() => {
     fetchSavedAnswers()
+    
+    // Set up an interval to refresh the answers every minute
+    const intervalId = setInterval(() => {
+      fetchSavedAnswers()
+    }, 60000) // 60 seconds
+    
+    return () => clearInterval(intervalId)
   }, [fetchSavedAnswers])
 
   // Memoize context value to prevent unnecessary re-renders

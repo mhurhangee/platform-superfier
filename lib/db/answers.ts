@@ -1,5 +1,4 @@
 import { PrismaClient, Prisma } from '@prisma/client'
-import { unstable_cache } from 'next/cache'
 import { Citation, SavedAnswer, SaveAnswerInput } from '@/types/answers'
 
 // Initialize Prisma Client
@@ -37,30 +36,26 @@ export async function saveAnswer(data: SaveAnswerInput & { userId: string }): Pr
  * @param userId User ID
  * @returns Array of saved answers
  */
-export const getSavedAnswers = unstable_cache(
-  async (userId: string): Promise<SavedAnswer[]> => {
-    try {
-      const results = await prisma.savedAnswer.findMany({
-        where: {
-          userId,
-        },
-        orderBy: {
-          createdAt: 'desc',
-        },
-      })
+export async function getSavedAnswers(userId: string): Promise<SavedAnswer[]> {
+  try {
+    const results = await prisma.savedAnswer.findMany({
+      where: {
+        userId,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    })
 
-      return results.map((result) => ({
-        ...result,
-        citations: result.citations as unknown as Citation[] | null,
-      }))
-    } catch (error) {
-      console.error('Error fetching saved answers:', error)
-      throw new Error('Failed to fetch saved answers')
-    }
-  },
-  ['user-saved-answers'],
-  { revalidate: 60 } // Revalidate every minute
-)
+    return results.map((result) => ({
+      ...result,
+      citations: result.citations as unknown as Citation[] | null,
+    }))
+  } catch (error) {
+    console.error('Error fetching saved answers:', error)
+    throw new Error('Failed to fetch saved answers')
+  }
+}
 
 /**
  * Get a specific saved answer by ID
@@ -101,25 +96,27 @@ export async function getSavedAnswerById(
 /**
  * Delete a saved answer
  * @param id Answer ID
- * @param userId User ID for authorization check
+ * @param userId Optional user ID for authorization check
  * @returns Success status
  */
-export async function deleteSavedAnswer(id: string, userId: string): Promise<boolean> {
+export async function deleteSavedAnswer(id: string, userId?: string): Promise<boolean> {
   try {
-    // First check if the answer exists and belongs to the user
-    const answer = await prisma.savedAnswer.findUnique({
-      where: {
-        id,
-      },
-    })
+    // If userId is provided, check authorization
+    if (userId) {
+      const answer = await prisma.savedAnswer.findUnique({
+        where: {
+          id,
+        },
+      })
 
-    if (!answer) {
-      return false
-    }
+      if (!answer) {
+        return false
+      }
 
-    // Authorization check
-    if (answer.userId !== userId) {
-      return false
+      // Authorization check
+      if (answer.userId !== userId) {
+        return false
+      }
     }
 
     await prisma.savedAnswer.delete({
