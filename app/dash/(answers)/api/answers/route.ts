@@ -2,32 +2,39 @@ import { NextRequest } from 'next/server'
 import Exa from 'exa-js'
 
 import { getUserId, getOrgId } from '@/lib/utils/auth'
+import { createErrorResponse, createSuccessResponse } from '@/lib/utils/api'
 
 // Get the API key from environment variables
 const EXA_API_KEY = process.env.EXA_API_KEY || ''
 
 export const runtime = 'edge'
 
+/**
+ * API route for getting answers to questions
+ */
 export async function POST(req: NextRequest) {
   try {
-    const { question } = await req.json()
-
+    // 1. Authentication check
     const { userId } = await getUserId()
     const { orgId } = await getOrgId()
 
     if (!userId || !orgId) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return createErrorResponse('Unauthorized', 401)
     }
 
+    // 2. Input validation
+    const { question } = await req.json()
+
     if (!question || typeof question !== 'string') {
-      return Response.json({ error: 'Invalid question' }, { status: 400 })
+      return createErrorResponse('Invalid question', 400)
     }
 
     // Check if API key is available
     if (!EXA_API_KEY) {
-      return Response.json({ error: 'EXA API key is not configured' }, { status: 500 })
+      return createErrorResponse('EXA API key is not configured', 500)
     }
 
+    // 3. Business logic
     // Initialize Exa client
     const exa = new Exa(EXA_API_KEY)
 
@@ -59,13 +66,11 @@ export async function POST(req: NextRequest) {
         citation.favicon || `https://www.google.com/s2/favicons?domain=${citation.url}&sz=128`,
     }))
 
-    // Return the result as JSON
-    return Response.json({ answer, citations })
+    // 4. Return success response
+    return createSuccessResponse({ answer, citations })
   } catch (error) {
+    // 5. Error handling
     console.error('Error processing answer request:', error)
-    return Response.json(
-      { error: 'An error occurred while processing your request' },
-      { status: 500 }
-    )
+    return createErrorResponse('An error occurred while processing your request', 500)
   }
 }

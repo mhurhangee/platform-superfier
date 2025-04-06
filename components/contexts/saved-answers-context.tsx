@@ -1,35 +1,14 @@
 'use client'
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback } from 'react'
 import { toast } from 'sonner'
-
-export interface Citation {
-  title: string
-  url: string
-  favicon: string
-}
-
-// Types
-export interface SavedAnswer {
-  id: string
-  query: string
-  answer: string
-  citations?: Citation[]
-  shared: boolean
-  createdAt: string
-  updatedAt: string
-  userId: string
-}
-
-interface SaveAnswerInput {
-  query: string
-  answer: string
-  citations?: Citation[]
-}
+import { SavedAnswer, Citation, SaveAnswerInput } from '@/types/answers'
 
 interface SavedAnswersContextType {
   savedAnswers: SavedAnswer[]
   isLoading: boolean
+  isSaving: boolean
+  isDeleting: Record<string, boolean>
   saveAnswer: (data: SaveAnswerInput) => Promise<boolean>
   deleteAnswer: (id: string) => Promise<boolean>
   refreshAnswers: () => Promise<void>
@@ -41,13 +20,14 @@ const SavedAnswersContext = createContext<SavedAnswersContextType | undefined>(u
 export function SavedAnswersProvider({ children }: { children: ReactNode }) {
   const [savedAnswers, setSavedAnswers] = useState<SavedAnswer[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+  const [isDeleting, setIsDeleting] = useState<Record<string, boolean>>({})
 
   // Function to fetch saved answers
-  const fetchSavedAnswers = async () => {
+  const fetchSavedAnswers = useCallback(async () => {
     try {
       setIsLoading(true)
       const response = await fetch('/dash/api/saved-answers')
-
       if (!response.ok) {
         throw new Error('Failed to fetch saved answers')
       }
@@ -59,20 +39,17 @@ export function SavedAnswersProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false)
     }
-  }
-
-  // Initial fetch
-  useEffect(() => {
-    fetchSavedAnswers()
   }, [])
 
-  // Function to refresh answers
-  const refreshAnswers = async () => {
+  // Function to refresh saved answers
+  const refreshAnswers = useCallback(async () => {
     await fetchSavedAnswers()
-  }
+  }, [fetchSavedAnswers])
 
   // Function to save an answer
-  const saveAnswer = async (data: SaveAnswerInput): Promise<boolean> => {
+  const saveAnswer = useCallback(async (data: SaveAnswerInput): Promise<boolean> => {
+    setIsSaving(true)
+
     try {
       const response = await fetch('/dash/api/save-answer', {
         method: 'POST',
@@ -99,11 +76,22 @@ export function SavedAnswersProvider({ children }: { children: ReactNode }) {
       console.error('Error saving answer:', error)
       toast.error('Failed to save answer')
       return false
+    } finally {
+      setIsSaving(false)
     }
-  }
+  }, [])
 
   // Function to delete an answer
-  const deleteAnswer = async (id: string): Promise<boolean> => {
+  const deleteAnswer = useCallback(async (id: string): Promise<boolean> => {
+    // Store current state for rollback
+    const previousAnswers = [...savedAnswers]
+
+    // Update isDeleting state
+    setIsDeleting((prev) => ({ ...prev, [id]: true }))
+
+    // Optimistically update UI
+    setSavedAnswers(savedAnswers.filter((answer) => answer.id !== id))
+
     try {
       const response = await fetch(`/dash/api/saved-answers?id=${id}`, {
         method: 'DELETE',
@@ -113,25 +101,38 @@ export function SavedAnswersProvider({ children }: { children: ReactNode }) {
         throw new Error('Failed to delete answer')
       }
 
-      // Remove the deleted answer from the state
-      setSavedAnswers((prev) => prev.filter((answer) => answer.id !== id))
-
       toast.success('Answer deleted')
       return true
     } catch (error) {
       console.error('Error deleting answer:', error)
       toast.error('Failed to delete answer')
-      return false
-    }
-  }
 
-  const contextValue = {
-    savedAnswers,
-    isLoading,
-    saveAnswer,
-    deleteAnswer,
-    refreshAnswers,
-  }
+      // Rollback on error
+      setSavedAnswers(previousAnswers)
+      return false
+    } finally {
+      setIsDeleting((prev) => ({ ...prev, [id]: false }))
+    }
+  }, [savedAnswers])
+
+  // Load saved answers on component mount
+  useEffect(() => {
+    fetchSavedAnswers()
+  }, [fetchSavedAnswers])
+
+  // Memoize context value to prevent unnecessary re-renders
+  const contextValue = useMemo(
+    () => ({
+      savedAnswers,
+      isLoading,
+      isSaving,
+      isDeleting,
+      saveAnswer,
+      deleteAnswer,
+      refreshAnswers,
+    }),
+    [savedAnswers, isLoading, isSaving, isDeleting, saveAnswer, deleteAnswer, refreshAnswers]
+  )
 
   return (
     <SavedAnswersContext.Provider value={contextValue}>{children}</SavedAnswersContext.Provider>
@@ -146,3 +147,6 @@ export function useSavedAnswers() {
   }
   return context
 }
+
+// Re-export types from the shared types file
+export type { SavedAnswer, Citation }

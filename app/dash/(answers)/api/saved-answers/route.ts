@@ -1,54 +1,66 @@
 import { NextRequest } from 'next/server'
-import { getUserSavedAnswers, deleteSavedAnswer } from '@/lib/db/answers'
+import { getSavedAnswers, deleteSavedAnswer } from '@/lib/db/answers'
 import { getUserId } from '@/lib/utils/auth'
+import { createErrorResponse, createSuccessResponse } from '@/lib/utils/api'
 
-export async function GET() {
+/**
+ * API route for getting saved answers
+ */
+export async function GET(req: NextRequest) {
   try {
-    // Get user ID from auth
+    // 1. Authentication check
     const { userId } = await getUserId()
 
     if (!userId) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return createErrorResponse('Unauthorized', 401)
     }
 
-    // Get saved answers for the user
-    const savedAnswers = await getUserSavedAnswers(userId)
+    // 2. Business logic
+    // Get saved answers from the database
+    const savedAnswers = await getSavedAnswers(userId)
 
-    return Response.json({ savedAnswers })
+    // 3. Return success response
+    return createSuccessResponse({ savedAnswers })
   } catch (error) {
+    // 4. Error handling
     console.error('Error fetching saved answers:', error)
-    return Response.json(
-      { error: 'An error occurred while fetching saved answers' },
-      { status: 500 }
-    )
+    return createErrorResponse('An error occurred while fetching saved answers', 500)
   }
 }
 
+/**
+ * API route for deleting a saved answer
+ */
 export async function DELETE(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url)
-    const id = searchParams.get('id')
-
-    if (!id) {
-      return Response.json({ error: 'Missing answer ID' }, { status: 400 })
-    }
-
-    // Get user ID from auth
+    // 1. Authentication check
     const { userId } = await getUserId()
 
     if (!userId) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return createErrorResponse('Unauthorized', 401)
     }
 
-    // Delete the saved answer
-    await deleteSavedAnswer(id)
+    // 2. Input validation
+    const url = new URL(req.url)
+    const id = url.searchParams.get('id')
 
-    return Response.json({ success: true })
+    if (!id) {
+      return createErrorResponse('Missing answer ID', 400)
+    }
+
+    // 3. Business logic
+    // Delete the answer from the database
+    const success = await deleteSavedAnswer(id, userId)
+
+    if (!success) {
+      return createErrorResponse('Answer not found or not authorized to delete', 404)
+    }
+
+    // 4. Return success response
+    return createSuccessResponse({ success: true })
   } catch (error) {
+    // 5. Error handling
     console.error('Error deleting saved answer:', error)
-    return Response.json(
-      { error: 'An error occurred while deleting the saved answer' },
-      { status: 500 }
-    )
+    return createErrorResponse('An error occurred while deleting the saved answer', 500)
   }
 }

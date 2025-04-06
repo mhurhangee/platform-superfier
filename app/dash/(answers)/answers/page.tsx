@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, FormEvent, KeyboardEvent } from 'react'
+import { useState, FormEvent, KeyboardEvent, useCallback } from 'react'
 
 import { toast } from 'sonner'
 import { motion } from 'framer-motion'
@@ -11,62 +11,43 @@ import { Centred } from '@/components/theme/centred'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Skeleton } from '@/components/ui/skeleton'
+import { LoadingPlaceholder } from '@/components/ui/loading-placeholder'
+import { ErrorMessage } from '@/components/ui/error-message'
+import { CitationList } from '@/app/dash/(answers)/components/citation-list'
 
 import {
   Loader2,
   MessageCircleQuestion,
-  ExternalLink,
-  AlertCircle,
   RotateCcw,
   Bookmark,
   BookmarkCheck,
 } from 'lucide-react'
 
-import { useSavedAnswers } from '../../../../components/contexts/saved-answers-context'
-
-// Define the types for our API response
-interface Citation {
-  title: string
-  url: string
-  favicon: string
-}
-
-interface AnswerResponse {
-  answer: string
-  citations?: Citation[]
-  error?: string
-}
+import { useSavedAnswers } from '@/components/contexts/saved-answers-context'
+import { useAsync } from '@/hooks/useAsync'
+import { AnswerResponse } from '@/types/answers'
 
 export default function AnswersPage() {
-  const { saveAnswer } = useSavedAnswers()
+  const { saveAnswer, isSaving } = useSavedAnswers()
   const [query, setQuery] = useState('')
   const [searchedQuery, setSearchedQuery] = useState('') // Store the query that was actually searched
-  const [isLoading, setIsLoading] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
   const [result, setResult] = useState<AnswerResponse | null>(null)
-  const [error, setError] = useState<string | null>(null)
   const [isSaved, setIsSaved] = useState(false)
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault()
-    if (!query.trim()) return
-
-    // Save the current query as the searched query
-    setSearchedQuery(query.trim())
-
-    setIsLoading(true)
-    setResult(null)
-    setError(null)
-    setIsSaved(false)
-
-    try {
+  
+  // Use the async hook for fetching answers
+  const { 
+    isLoading, 
+    error, 
+    execute: fetchAnswer,
+    reset: resetAsyncState
+  } = useAsync<AnswerResponse>(
+    async (question: string) => {
       const response = await fetch('/dash/api/answers', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ question: query.trim() }),
+        body: JSON.stringify({ question }),
       })
 
       const data = await response.json()
@@ -75,38 +56,55 @@ export default function AnswersPage() {
         throw new Error(data.error || 'Failed to get answer')
       }
 
-      setResult(data)
-    } catch (err) {
-      console.error('Error fetching answer:', err)
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred')
-      toast.error('Failed to get answer')
-    } finally {
-      setIsLoading(false)
+      return data
+    },
+    {
+      showErrorToast: true,
+      errorMessage: 'Failed to get answer'
     }
-  }
+  )
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+  // Memoize the submit handler to avoid recreating it on every render
+  const handleSubmit = useCallback(
+    async (e: FormEvent) => {
       e.preventDefault()
-      if (!isLoading && query.trim()) {
-        handleSubmit(e as unknown as FormEvent)
-      }
-    }
-  }
+      if (!query.trim()) return
 
-  const handleReset = () => {
+      // Save the current query as the searched query
+      setSearchedQuery(query.trim())
+      setResult(null)
+      setIsSaved(false)
+
+      const data = await fetchAnswer(query.trim())
+      setResult(data)
+    },
+    [query, fetchAnswer]
+  )
+
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault()
+        if (!isLoading && query.trim()) {
+          handleSubmit(e as unknown as FormEvent)
+        }
+      }
+    },
+    [isLoading, query, handleSubmit]
+  )
+
+  const handleReset = useCallback(() => {
+    resetAsyncState()
     setResult(null)
-    setError(null)
     setQuery('')
     setSearchedQuery('') // Also reset the searched query
     setIsSaved(false)
     toast.info('Search reset')
-  }
+  }, [resetAsyncState])
 
-  const handleSaveAnswer = async () => {
+  const handleSaveAnswer = useCallback(async () => {
     if (!result || !searchedQuery) return
 
-    setIsSaving(true)
     try {
       const success = await saveAnswer({
         query: searchedQuery,
@@ -120,10 +118,8 @@ export default function AnswersPage() {
     } catch (err) {
       console.error('Error saving answer:', err)
       toast.error('Failed to save answer')
-    } finally {
-      setIsSaving(false)
     }
-  }
+  }, [result, searchedQuery, saveAnswer])
 
   return (
     <Centred
@@ -184,14 +180,7 @@ export default function AnswersPage() {
             transition={{ duration: 0.3 }}
             className="w-full"
           >
-            <Card className="p-6 w-full">
-              <div className="space-y-4">
-                <Skeleton className="h-4 w-3/4" />
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-5/6" />
-                <Skeleton className="h-4 w-2/3" />
-              </div>
-            </Card>
+            <LoadingPlaceholder lines={4} />
           </motion.div>
         )}
 
@@ -202,15 +191,7 @@ export default function AnswersPage() {
             transition={{ duration: 0.3 }}
             className="w-full"
           >
-            <Card className="p-6 w-full border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-800/50">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="size-5 text-red-500 mt-0.5" />
-                <div>
-                  <h3 className="font-medium text-red-700 dark:text-red-400">Error</h3>
-                  <p className="text-red-600 dark:text-red-300 text-sm">{error}</p>
-                </div>
-              </div>
-            </Card>
+            <ErrorMessage error={error} />
           </motion.div>
         )}
 
@@ -255,44 +236,8 @@ export default function AnswersPage() {
               </CardContent>
             </Card>
 
-            {result.citations && result.citations.length > 0 && (
-              <div className="space-y-2">
-                <h3 className="text-sm font-medium text-muted-foreground">Sources</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {result.citations.map((citation, index) => (
-                    <a
-                      key={index}
-                      href={citation.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="no-underline"
-                    >
-                      <Card className="p-3 hover:bg-muted/50 transition-colors">
-                        <div className="flex items-start gap-3">
-                          {citation.favicon && (
-                            <img
-                              src={citation.favicon}
-                              alt=""
-                              width={20}
-                              height={20}
-                              className="size-5 rounded-sm mt-0.5"
-                              onError={(e) => {
-                                ;(e.target as HTMLImageElement).style.display = 'none'
-                              }}
-                            />
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm truncate">{citation.title}</p>
-                            <p className="text-xs text-muted-foreground truncate">{citation.url}</p>
-                          </div>
-                          <ExternalLink className="size-3 text-muted-foreground flex-shrink-0" />
-                        </div>
-                      </Card>
-                    </a>
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* Use the CitationList component */}
+            <CitationList citations={result.citations} />
           </motion.div>
         )}
       </div>

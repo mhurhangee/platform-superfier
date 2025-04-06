@@ -1,6 +1,6 @@
 'use client'
 import ReactMarkdown from 'react-markdown'
-import { ExternalLink, X, Trash2 } from 'lucide-react'
+import { X, Trash2 } from 'lucide-react'
 
 import {
   Dialog,
@@ -11,23 +11,13 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
-
-interface Citation {
-  title: string
-  url: string
-  favicon: string
-}
+import { CitationList } from '@/app/dash/(answers)/components/citation-list'
+import { SavedAnswer } from '@/types/answers'
 
 interface SavedAnswerModalProps {
   isOpen: boolean
   onClose: () => void
-  answer: {
-    id: string
-    query: string
-    answer: string
-    citations?: Citation[]
-  } | null
+  answer: SavedAnswer | null
   onDelete?: (id: string) => void
 }
 
@@ -51,44 +41,8 @@ export function SavedAnswerModal({ isOpen, onClose, answer, onDelete }: SavedAns
           </div>
         </div>
 
-        {answer.citations && answer.citations.length > 0 && (
-          <div className="mt-6 space-y-2">
-            <h3 className="text-sm font-medium text-muted-foreground">Sources</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {answer.citations.map((citation, index) => (
-                <a
-                  key={index}
-                  href={citation.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="no-underline"
-                >
-                  <Card className="p-3 hover:bg-muted/50 transition-colors">
-                    <div className="flex items-start gap-3">
-                      {citation.favicon && (
-                        <img
-                          src={citation.favicon}
-                          alt=""
-                          width={20}
-                          height={20}
-                          className="size-5 rounded-sm mt-0.5"
-                          onError={(e) => {
-                            ;(e.target as HTMLImageElement).style.display = 'none'
-                          }}
-                        />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm truncate">{citation.title}</p>
-                        <p className="text-xs text-muted-foreground truncate">{citation.url}</p>
-                      </div>
-                      <ExternalLink className="size-3 text-muted-foreground flex-shrink-0" />
-                    </div>
-                  </Card>
-                </a>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* Use the new CitationList component */}
+        <CitationList citations={answer.citations} className="mt-6" />
 
         {onDelete && (
           <DialogFooter className="mt-6">

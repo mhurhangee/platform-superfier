@@ -1,22 +1,28 @@
 import { NextRequest } from 'next/server'
 import { saveAnswer } from '@/lib/db/answers'
 import { getUserId } from '@/lib/utils/auth'
+import { createErrorResponse, createSuccessResponse } from '@/lib/utils/api'
 
+/**
+ * API route for saving an answer
+ */
 export async function POST(req: NextRequest) {
   try {
-    const { query, answer, citations } = await req.json()
-
-    // Get user ID from auth
+    // 1. Authentication check
     const { userId } = await getUserId()
 
     if (!userId) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return createErrorResponse('Unauthorized', 401)
     }
+
+    // 2. Input validation
+    const { query, answer, citations } = await req.json()
 
     if (!query || !answer) {
-      return Response.json({ error: 'Missing required fields' }, { status: 400 })
+      return createErrorResponse('Missing required fields', 400)
     }
 
+    // 3. Business logic
     // Save the answer to the database
     const savedAnswer = await saveAnswer({
       query,
@@ -25,9 +31,11 @@ export async function POST(req: NextRequest) {
       userId,
     })
 
-    return Response.json({ success: true, answer: savedAnswer })
+    // 4. Return success response
+    return createSuccessResponse({ success: true, answer: savedAnswer })
   } catch (error) {
+    // 5. Error handling
     console.error('Error saving answer:', error)
-    return Response.json({ error: 'An error occurred while saving the answer' }, { status: 500 })
+    return createErrorResponse('An error occurred while saving the answer', 500)
   }
 }

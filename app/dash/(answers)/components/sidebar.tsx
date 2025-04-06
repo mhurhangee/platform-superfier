@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useCallback } from 'react'
 import {
   MessageCircleQuestion,
   Loader2,
@@ -15,50 +15,54 @@ import {
 } from 'lucide-react'
 import { SavedAnswerModal } from './answer-modal'
 import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { CollapsibleSection } from '@/components/ui/collapsible-section'
-import { useSavedAnswers, SavedAnswer } from '../../../../components/contexts/saved-answers-context'
+import { LoadingPlaceholder } from '@/components/ui/loading-placeholder'
+import { useSavedAnswers } from '@/components/contexts/saved-answers-context'
+import { SavedAnswer } from '@/types/answers'
+import { useSearch } from '@/hooks/useSearch'
+import { useAsync } from '@/hooks/useAsync'
 
 export function AnswersSidebar() {
-  const { savedAnswers, isLoading, deleteAnswer } = useSavedAnswers()
+  const { savedAnswers, isLoading, isDeleting, deleteAnswer } = useSavedAnswers()
   const [selectedAnswer, setSelectedAnswer] = useState<SavedAnswer | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [page, setPage] = useState(1)
-  const itemsPerPage = 10
 
-  // Filter saved answers based on search query
-  const filteredAnswers = savedAnswers.filter((answer) =>
-    answer.query.toLowerCase().includes(searchQuery.toLowerCase())
+  // Use the custom search hook
+  const { searchQuery, setSearchQuery, filteredItems, paginateResults } = useSearch(
+    savedAnswers,
+    'query',
+    ''
   )
 
-  // Paginate answers
-  const paginatedAnswers = filteredAnswers.slice(0, page * itemsPerPage)
-  const hasMore = paginatedAnswers.length < filteredAnswers.length
+  // Paginate the filtered answers
+  const { paginatedItems, hasMore, loadMore } = paginateResults(10)
+
+  // Use the async hook for deleting answers
+  const { execute: executeDelete } = useAsync(
+    async (id: string) => {
+      return await deleteAnswer(id)
+    },
+    {
+      showSuccessToast: true,
+      showErrorToast: true,
+      successMessage: 'Answer deleted successfully',
+      errorMessage: 'Failed to delete answer'
+    }
+  )
 
   // Handle opening the modal with a selected answer
-  const handleOpenAnswer = (answer: SavedAnswer) => {
+  const handleOpenAnswer = useCallback((answer: SavedAnswer) => {
     setSelectedAnswer(answer)
     setIsModalOpen(true)
-  }
+  }, [])
 
   // Handle deleting a saved answer
-  const handleDeleteAnswer = async (id: string, e: React.MouseEvent) => {
+  const handleDeleteAnswer = useCallback(async (id: string, e: React.MouseEvent) => {
     e.stopPropagation() // Prevent opening the modal
-    await deleteAnswer(id)
-  }
-
-  // Load more answers
-  const loadMore = () => {
-    setPage((prev) => prev + 1)
-  }
-
-  // Reset pagination when search query changes
-  useEffect(() => {
-    setPage(1)
-  }, [searchQuery])
+    await executeDelete(id)
+  }, [executeDelete])
 
   return (
     <div className="flex flex-col">
@@ -113,16 +117,12 @@ export function AnswersSidebar() {
           </div>
 
           {isLoading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-          ) : filteredAnswers.length > 0 ? (
+            <LoadingPlaceholder variant="inline" lines={3} />
+          ) : filteredItems.length > 0 ? (
             <div className="space-y-3">
               <ScrollArea className="h-[350px] pr-3">
                 <div className="space-y-2">
-                  {paginatedAnswers.map((answer) => (
+                  {paginatedItems.map((answer) => (
                     <div
                       key={answer.id}
                       onClick={() => handleOpenAnswer(answer)}
@@ -139,8 +139,13 @@ export function AnswersSidebar() {
                         size="icon"
                         className="h-6 w-6 absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
                         onClick={(e) => handleDeleteAnswer(answer.id, e)}
+                        disabled={isDeleting[answer.id]}
                       >
-                        <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                        {isDeleting[answer.id] ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                        )}
                       </Button>
                     </div>
                   ))}
@@ -200,14 +205,7 @@ export function AnswersSidebar() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         answer={selectedAnswer}
-        onDelete={
-          selectedAnswer
-            ? (id) => {
-                deleteAnswer(id)
-                setIsModalOpen(false)
-              }
-            : undefined
-        }
+        onDelete={deleteAnswer}
       />
     </div>
   )

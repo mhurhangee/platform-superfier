@@ -1,117 +1,177 @@
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, Prisma } from '@prisma/client'
 import { unstable_cache } from 'next/cache'
-import { Citation } from '@/components/contexts/saved-answers-context'
+import { Citation, SavedAnswer, SaveAnswerInput } from '@/types/answers'
 
 // Initialize Prisma Client
 const prisma = new PrismaClient()
 
-// Type for saved answers
-export interface SavedAnswerInput {
-  query: string
-  answer: string
-  citations?: Citation[] | null
-  userId: string
-  shared?: boolean
-}
-
-export interface SavedAnswer {
-  id: string
-  query: string
-  answer: string
-  citations?: Citation[] | null
-  shared: boolean
-  createdAt: Date
-  updatedAt: Date
-  userId: string
-}
-
-// Save an answer
-export async function saveAnswer(data: SavedAnswerInput): Promise<SavedAnswer> {
-  const result = await prisma.savedAnswer.create({
-    data: {
-      query: data.query,
-      answer: data.answer,
-      citations: data.citations ? JSON.parse(JSON.stringify(data.citations)) : null,
-      userId: data.userId,
-      shared: data.shared || false,
-    },
-  })
-
-  return {
-    ...result,
-    citations: result.citations ? JSON.parse(JSON.stringify(result.citations)) : null,
-  }
-}
-
-// Get all saved answers for a user
-export const getUserSavedAnswers = unstable_cache(
-  async (userId: string): Promise<SavedAnswer[]> => {
-    const results = await prisma.savedAnswer.findMany({
-      where: {
-        userId,
-      },
-      orderBy: {
-        createdAt: 'desc',
+/**
+ * Save an answer to the database
+ * @param data Answer data with userId
+ * @returns The saved answer
+ */
+export async function saveAnswer(data: SaveAnswerInput & { userId: string }): Promise<SavedAnswer> {
+  try {
+    const result = await prisma.savedAnswer.create({
+      data: {
+        query: data.query,
+        answer: data.answer,
+        citations: data.citations as unknown as Prisma.InputJsonValue,
+        userId: data.userId,
+        shared: data.shared || false,
       },
     })
 
-    return results.map((result) => ({
+    return {
       ...result,
-      citations: result.citations ? JSON.parse(JSON.stringify(result.citations)) : null,
-    }))
+      citations: result.citations as unknown as Citation[] | null,
+    }
+  } catch (error) {
+    console.error('Error saving answer:', error)
+    throw new Error('Failed to save answer')
+  }
+}
+
+/**
+ * Get all saved answers for a user
+ * @param userId User ID
+ * @returns Array of saved answers
+ */
+export const getSavedAnswers = unstable_cache(
+  async (userId: string): Promise<SavedAnswer[]> => {
+    try {
+      const results = await prisma.savedAnswer.findMany({
+        where: {
+          userId,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      })
+
+      return results.map((result) => ({
+        ...result,
+        citations: result.citations as unknown as Citation[] | null,
+      }))
+    } catch (error) {
+      console.error('Error fetching saved answers:', error)
+      throw new Error('Failed to fetch saved answers')
+    }
   },
   ['user-saved-answers'],
   { revalidate: 60 } // Revalidate every minute
 )
 
-// Get a specific saved answer by ID
-export async function getSavedAnswerById(id: string): Promise<SavedAnswer | null> {
-  const result = await prisma.savedAnswer.findUnique({
-    where: {
-      id,
-    },
-  })
+/**
+ * Get a specific saved answer by ID
+ * @param id Answer ID
+ * @param userId User ID for authorization check
+ * @returns The saved answer or null if not found
+ */
+export async function getSavedAnswerById(
+  id: string,
+  userId: string
+): Promise<SavedAnswer | null> {
+  try {
+    const result = await prisma.savedAnswer.findUnique({
+      where: {
+        id,
+      },
+    })
 
-  if (!result) return null
+    if (!result) {
+      return null
+    }
 
-  return {
-    ...result,
-    citations: result.citations ? JSON.parse(JSON.stringify(result.citations)) : null,
+    // Authorization check
+    if (result.userId !== userId) {
+      throw new Error('Unauthorized access to saved answer')
+    }
+
+    return {
+      ...result,
+      citations: result.citations as unknown as Citation[] | null,
+    }
+  } catch (error) {
+    console.error('Error fetching saved answer:', error)
+    throw new Error('Failed to fetch saved answer')
   }
 }
 
-// Delete a saved answer
-export async function deleteSavedAnswer(id: string): Promise<void> {
-  await prisma.savedAnswer.delete({
-    where: {
-      id,
-    },
-  })
+/**
+ * Delete a saved answer
+ * @param id Answer ID
+ * @param userId User ID for authorization check
+ * @returns Success status
+ */
+export async function deleteSavedAnswer(id: string, userId: string): Promise<boolean> {
+  try {
+    // First check if the answer exists and belongs to the user
+    const answer = await prisma.savedAnswer.findUnique({
+      where: {
+        id,
+      },
+    })
+
+    if (!answer) {
+      return false
+    }
+
+    // Authorization check
+    if (answer.userId !== userId) {
+      return false
+    }
+
+    await prisma.savedAnswer.delete({
+      where: {
+        id,
+      },
+    })
+    return true
+  } catch (error) {
+    console.error('Error deleting saved answer:', error)
+    return false
+  }
 }
 
-// Toggle the shared status of an answer
-export async function toggleAnswerShared(id: string): Promise<SavedAnswer> {
-  const answer = await prisma.savedAnswer.findUnique({
-    where: {
-      id,
-    },
-  })
+/**
+ * Toggle the shared status of an answer
+ * @param id Answer ID
+ * @param userId User ID for authorization check
+ * @returns The updated answer
+ */
+export async function toggleAnswerShared(id: string, userId: string): Promise<SavedAnswer> {
+  try {
+    const answer = await prisma.savedAnswer.findUnique({
+      where: {
+        id,
+      },
+    })
 
-  if (!answer) {
-    throw new Error('Answer not found')
-  }
+    if (!answer) {
+      throw new Error('Answer not found')
+    }
 
-  const result = await prisma.savedAnswer.update({
-    where: {
-      id,
-    },
-    data: {
-      shared: !answer.shared,
-    },
-  })
+    // Authorization check
+    if (answer.userId !== userId) {
+      throw new Error('Unauthorized access to saved answer')
+    }
 
-  return {
-    ...result,
-    citations: result.citations ? JSON.parse(JSON.stringify(result.citations)) : null,
+    const result = await prisma.savedAnswer.update({
+      where: {
+        id,
+      },
+      data: {
+        shared: !answer.shared,
+      },
+    })
+
+    return {
+      ...result,
+      citations: result.citations as unknown as Citation[] | null,
+    }
+  } catch (error) {
+    console.error('Error toggling answer shared status:', error)
+    throw new Error('Failed to update answer')
   }
 }
